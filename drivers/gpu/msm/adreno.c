@@ -1172,17 +1172,17 @@ static int adreno_of_get_power(struct adreno_device *adreno_dev,
 	/* get pm-qos-active-latency, set it to default if not found */
 	if (of_property_read_u32(node, "qcom,pm-qos-active-latency",
 		&device->pwrctrl.pm_qos_active_latency))
-		device->pwrctrl.pm_qos_active_latency = 501;
+		device->pwrctrl.pm_qos_active_latency = 743;
 
 	/* get pm-qos-cpu-mask-latency, set it to default if not found */
 	if (of_property_read_u32(node, "qcom,l2pc-cpu-mask-latency",
 		&device->pwrctrl.pm_qos_cpu_mask_latency))
-		device->pwrctrl.pm_qos_cpu_mask_latency = 501;
+		device->pwrctrl.pm_qos_cpu_mask_latency = 743;
 
 	/* get pm-qos-wakeup-latency, set it to default if not found */
 	if (of_property_read_u32(node, "qcom,pm-qos-wakeup-latency",
 		&device->pwrctrl.pm_qos_wakeup_latency))
-		device->pwrctrl.pm_qos_wakeup_latency = 101;
+		device->pwrctrl.pm_qos_wakeup_latency = 100;
 
 	if (of_property_read_u32(node, "qcom,idle-timeout", &timeout))
 		timeout = 64;
@@ -1851,9 +1851,6 @@ static int _adreno_start(struct adreno_device *adreno_dev)
 
 	regulator_left_on = regulators_left_on(device);
 
-	/* Clear any GPU faults that might have been left over */
-	adreno_clear_gpu_fault(adreno_dev);
-
 	/* Put the GPU in a responsive state */
 	status = kgsl_pwrctrl_change_state(device, KGSL_STATE_AWARE);
 	if (status)
@@ -1868,6 +1865,14 @@ static int _adreno_start(struct adreno_device *adreno_dev)
 	/* Soft reset the GPU if a regulator is stuck on*/
 	if (regulator_left_on)
 		_soft_reset(adreno_dev);
+
+	/*
+	 * Observed race between timeout fault (long IB detection) and
+	 * MISC hang (hard fault). MISC hang can be set while in recovery from
+	 * timeout fault. If fault flag is set in start path CP init fails.
+	 * Clear gpu fault to avoid such race.
+	 */
+	adreno_clear_gpu_fault(adreno_dev);
 
 	adreno_ringbuffer_set_global(adreno_dev, 0);
 

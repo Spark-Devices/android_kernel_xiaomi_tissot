@@ -602,7 +602,7 @@ static void update_temperature(struct thermal_zone_device *tz)
 	ret = thermal_zone_get_temp(tz, &temp);
 	if (ret) {
 		if (ret != -EAGAIN)
-			dev_warn(&tz->device,
+			dev_dbg(&tz->device,
 				 "failed to read out thermal zone (%d)\n",
 				 ret);
 		return;
@@ -2613,6 +2613,7 @@ static int thermal_pm_notify(struct notifier_block *nb,
 				unsigned long mode, void *_unused)
 {
 	struct thermal_zone_device *tz;
+	enum thermal_device_mode tz_mode;
 
 	switch (mode) {
 	case PM_HIBERNATION_PREPARE:
@@ -2625,9 +2626,15 @@ static int thermal_pm_notify(struct notifier_block *nb,
 	case PM_POST_SUSPEND:
 		atomic_set(&in_suspend, 0);
 		list_for_each_entry(tz, &thermal_tz_list, node) {
-			if (tz->ops->is_wakeable &&
-				tz->ops->is_wakeable(tz))
+			tz_mode = THERMAL_DEVICE_ENABLED;
+			if (tz->ops->get_mode)
+				tz->ops->get_mode(tz, &tz_mode);
+
+			if ((tz->ops->is_wakeable &&
+				tz->ops->is_wakeable(tz)) ||
+				tz_mode == THERMAL_DEVICE_DISABLED)
 				continue;
+			
 			thermal_zone_device_init(tz);
 			thermal_zone_device_update(tz,
 						   THERMAL_EVENT_UNSPECIFIED);
